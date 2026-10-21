@@ -24,7 +24,7 @@ describe("pre-req-vault", () => {
         signature,
         ...latestBlockhash,
       },
-      commitement,
+      commitement
     );
   };
 
@@ -33,17 +33,18 @@ describe("pre-req-vault", () => {
 
   const program = anchor.workspace.preReqVault as Program<PreReqVault>;
   const user = provider.wallet.publicKey;
+  const github = "Gungz";
 
   // Derive PDAs
 
   const [vaultStatePda, stateBump] = PublicKey.findProgramAddressSync(
     [Buffer.from("state"), user.toBuffer()],
-    program.programId,
+    program.programId
   );
 
   const [vaultPda, vaultBump] = PublicKey.findProgramAddressSync(
     [Buffer.from("vault"), vaultStatePda.toBuffer()],
-    program.programId,
+    program.programId
   );
 
   //   before(async () => {
@@ -88,7 +89,7 @@ describe("pre-req-vault", () => {
       })
       .rpc();
 
-    confirmTx(tx);
+    await confirmTx(tx);
 
     const finalBalanceVault = await provider.connection.getBalance(vaultPda);
     const finalBalanceUser = await provider.connection.getBalance(user);
@@ -104,16 +105,16 @@ describe("pre-req-vault", () => {
     const intialUserBalance = await provider.connection.getBalance(user);
 
     const applicationProgram = new PublicKey(
-      "TRBZyQHB3m68FGeVsqTK39Wm4xejadjVhP5MAZaKWDM",
+      "TRBZyQHB3m68FGeVsqTK39Wm4xejadjVhP5MAZaKWDM"
     );
 
     const applicationAccount = PublicKey.findProgramAddressSync(
       [Buffer.from("prereqs"), user.toBuffer()],
-      applicationProgram,
+      applicationProgram
     )[0];
 
     const tx = await program.methods
-      .withdraw(new BN(withdrawAmount))
+      .withdraw(new BN(withdrawAmount), github)
       .accountsStrict({
         user: user,
         vaultState: vaultStatePda,
@@ -124,13 +125,29 @@ describe("pre-req-vault", () => {
       })
       .rpc();
 
-    confirmTx(tx);
+    await confirmTx(tx);
 
     const finalBalanceVault = await provider.connection.getBalance(vaultPda);
     const finalBalanceUser = await provider.connection.getBalance(user);
 
     expect(finalBalanceVault).to.equal(initialVaultBalance - withdrawAmount);
     expect(finalBalanceUser).to.be.greaterThan(intialUserBalance);
+
+    // Verify the registration program recorded the application details.
+    // ApplicationAccount layout: 8-byte discriminator + 32-byte user pubkey +
+    // 1-byte bump + 1-byte pre_req_ts + 1-byte pre_req_rs + 4-byte length +
+    // utf8 github string.
+    const applicationAccountInfo = await provider.connection.getAccountInfo(
+      applicationAccount,
+      commitement
+    );
+    expect(applicationAccountInfo).to.not.be.null;
+    expect(applicationAccountInfo!.data.length).to.be.greaterThan(47);
+    const githubLength = applicationAccountInfo!.data.readUInt32LE(43);
+    const recordedGithub = applicationAccountInfo!.data
+      .subarray(47, 47 + githubLength)
+      .toString("utf8");
+    expect(recordedGithub).to.equal(github);
   });
 
   it(" Close the vault and withdraw all the funds", async () => {
@@ -146,12 +163,12 @@ describe("pre-req-vault", () => {
       })
       .rpc();
 
-    confirmTx(tx);
+    await confirmTx(tx);
 
     expect(await provider.connection.getBalance(vaultPda)).to.equal(0);
 
     const vaultStateInfo = await provider.connection.getAccountInfo(
-      vaultStatePda,
+      vaultStatePda
     );
     expect(vaultStateInfo).to.be.null;
 

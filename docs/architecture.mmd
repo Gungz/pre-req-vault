@@ -1,0 +1,73 @@
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "ui-monospace, SFMono-Regular, Menlo, monospace",
+    "fontSize": "13px"
+  },
+  "flowchart": { "curve": "basis", "padding": 14 }
+}}%%
+
+flowchart LR
+
+  %% ============ actors ============
+  USER("👤 User wallet · 6UBWeY…HBMy
+  devnet · signer · fees + rent payer")
+
+  SYS["⚙️ System Program (native)
+  lamport transfer + account creation"]
+
+  subgraph VP["🐍 pre-req-vault program — OURS · 6i1kTZWF…ASoZ · devnet"]
+    direction TB
+    INIT["initialize()"]
+    DEP["deposit(amount)"]
+    WIT["withdraw(amount, github)"]
+    CLOSE["close()"]
+    STATE[["🏛️ VaultState PDA · seeds [state, user]
+    stores { vault_bump, state_bump }"]]
+    VAULT[["💎 vault PDA · seeds [vault, vault_state]
+    holds the SOL · signs via seeds + bump"]]
+  end
+
+  subgraph REG["🏫 Turbin3 registration program — EXTERNAL · q3_pre_reqs_rs · TRBZyQHB…aKWDM"]
+    RINIT["initialize(github)"]
+    APP[["📋 prereqs PDA · seeds [prereqs, user] @ TRBZ
+    ApplicationAccount { user, bump, pre_req_ts, pre_req_rs, github }
+    ⚠ one per wallet · written only via CPI"]]
+  end
+
+  %% ============ 1 · initialize ============
+  USER -- "1 · initialize()" --> INIT
+  INIT -. "creates VaultState · payer = user
+  stores both bumps" .-> STATE
+
+  %% ============ 2 · deposit ============
+  USER -- "2 · deposit(amount)" --> DEP
+  DEP -- "System CPI: transfer" --> SYS
+  SYS -. "user → vault transfer
+  (creates vault a/c on 1st deposit)" .-> VAULT
+
+  %% ============ 3 · withdraw + CPI ============
+  USER -- "3 · withdraw(amount, github)" --> WIT
+  WIT -. "vault → user transfer
+  vault signs via seeds" .-> USER
+  WIT == "CPI initialize(github)
+  user signer inherited" ==> RINIT
+  RINIT -. "creates prereqs PDA · records github" .-> APP
+
+  %% ============ 4 · close ============
+  USER -- "4 · close()" --> CLOSE
+  CLOSE -. "drains vault → user
+  closes VaultState (rent refund)" .-> USER
+
+  %% ============ styling ============
+  classDef actor fill:#eff6ff,stroke:#2563eb,stroke-width:2px,color:#1e3a8a;
+  classDef nat fill:#f1f5f9,stroke:#64748b,stroke-width:1.5px,color:#334155;
+  classDef own fill:#f8fafc,stroke:#94a3b8,stroke-width:1.5px,color:#0f172a;
+  classDef cpi fill:#fff7ed,stroke:#d97706,stroke-width:2.5px,color:#7c2d12;
+  classDef pda fill:#f0fdf4,stroke:#059669,stroke-width:2px,stroke-dasharray:4 3,color:#064e3b;
+
+  class USER actor;
+  class SYS nat;
+  class INIT,DEP,CLOSE own;
+  class WIT,RINIT cpi;
+  class STATE,VAULT,APP pda;
